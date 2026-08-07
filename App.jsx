@@ -1532,7 +1532,22 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
 
   const [showManage, setShowManage] = useState(false);
   const [newEmployee, setNewEmployee] = useState(emptyNewEmployee);
-  const [newEmployeeGradeOpen, setNewEmployeeGradeOpen] = useState(null); // which of the three Grade dropdowns is open on the Add employee page: "manager" | "supervisor" | "employee" | null
+  const [newEmployeeGradeOpen, setNewEmployeeGradeOpen] = useState(null); // which of the four Grade dropdowns is open on the Add employee page: "manager" | "supervisor" | "employee" | "accountant" | null
+  const gradePickerRef = useRef(null);
+  // Closes the open Grade dropdown as soon as a click lands anywhere outside the
+  // whole grade-picker block (clicking one of the other three dropdown buttons already
+  // switches which one is open via the button's own onClick, so this only needs to
+  // handle clicks that land completely outside).
+  useEffect(() => {
+    if (!newEmployeeGradeOpen) return;
+    const handleClickOutside = (e) => {
+      if (gradePickerRef.current && !gradePickerRef.current.contains(e.target)) {
+        setNewEmployeeGradeOpen(null);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [newEmployeeGradeOpen]);
   const [openPermissionsFor, setOpenPermissionsFor] = useState(null); // username, or null if closed
   const [manageError, setManageError] = useState("");
   const [editingUsername, setEditingUsername] = useState(null);
@@ -6676,7 +6691,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   as typed while you pick a grade. Everything can still be fine-tuned
                   afterward from the Permissions screen reached by clicking the employee's
                   name once they've been added. */}
-              <div className="mt-3">
+              <div className="mt-3" ref={gradePickerRef}>
                 <label className="text-xs text-stone-500 block mb-1.5">Grade</label>
                 <div className="flex flex-wrap items-start gap-1.5 pb-1">
                   {GRADE_TIER_GROUPS.map((group) => {
