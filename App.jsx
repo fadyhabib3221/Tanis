@@ -714,9 +714,8 @@ const EMPLOYEE_ROLES = [
   { value: "supervisor", label: "Supervisor" },
   { value: "employee", label: "Employee" },
   { value: "owner", label: "Owner" },
-  { value: "gm", label: "General Manager" },
+  { value: "gm", label: "GM" },
   { value: "accountant", label: "Accountant" },
-  { value: "accounting_manager", label: "Accounts Manager" },
   ...SECTIONS_WITH_EMPLOYEE_GRADE.map((s) => ({ value: `employee_${s}`, label: EMPLOYEE_GRADE_LABELS[s] || `${SECTION_ROLE_LABELS[s]} Employee` })),
   ...SECTIONS_WITH_SUPERVISOR_GRADE.map((s) => ({ value: `supervisor_${s}`, label: SUPERVISOR_GRADE_LABELS[s] || `${SECTION_ROLE_LABELS[s]} Supervisor` })),
   ...SECTIONS_WITH_MANAGER_GRADE.map((s) => ({ value: `manager_${s}`, label: MANAGER_GRADE_LABELS[s] || `${SECTION_ROLE_LABELS[s]} Manager` })),
@@ -738,9 +737,6 @@ const ROLE_PRESETS = {
   supervisor: { canViewAll: true, canAdd: true, canEdit: true, canDelete: false, isAccounting: false, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   employee: { canViewAll: false, canAdd: true, canEdit: false, canDelete: false, isAccounting: false, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   accountant: { canViewAll: true, canAdd: false, canEdit: false, canDelete: false, isAccounting: true, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
-  // Accounts Manager: same accounting-only scope as Accountant, but with edit/delete
-  // rights on top of it — the senior grade within the accounting tier.
-  accounting_manager: { canViewAll: true, canAdd: false, canEdit: true, canDelete: true, isAccounting: true, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   owner: { canViewAll: true, canAdd: true, canEdit: true, canDelete: true, isAccounting: false, canManageCompanies: true, isOwner: true, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   gm: { canViewAll: true, canAdd: true, canEdit: true, canDelete: true, isAccounting: false, canManageCompanies: true, isOwner: true, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   ...Object.fromEntries(SECTIONS_WITH_EMPLOYEE_GRADE.map((s) => [`employee_${s}`, sectionRolePreset(s, "employee")])),
@@ -750,22 +746,19 @@ const ROLE_PRESETS = {
 
 const roleLabel = (value) => (EMPLOYEE_ROLES.find((r) => r.value === value) || {}).label || "Employee";
 
-// Grade picker on the Add employee page groups the 18 grades into four per-tier
-// dropdowns (Manager / Supervisor / Employee / Accountant). Supervisor and Employee
-// no longer offer a general, all-section grade — same as Manager — so every pick in
-// those three dropdowns is tied to a specific department. Accountant holds its two
-// grades (Accountant, Accounts Manager), neither of which has department variants.
-// Owner and GM have no variants of any kind, so they stand alone next to the four
-// dropdowns.
-const MANAGER_GRADES = EMPLOYEE_ROLES.filter((r) => r.value.startsWith("manager_"));
-const SUPERVISOR_GRADES = EMPLOYEE_ROLES.filter((r) => r.value.startsWith("supervisor_"));
-const EMPLOYEE_GRADES = EMPLOYEE_ROLES.filter((r) => r.value.startsWith("employee_"));
-const ACCOUNTANT_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "accountant" || r.value === "accounting_manager");
+// Grade picker on the Add employee page groups the 17 grades into three per-tier
+// dropdowns (Manager / Supervisor / Employee). Supervisor and Employee each also hold
+// a general, all-section grade alongside their per-department variants; Manager no
+// longer has a general grade, so its dropdown holds only the four per-department
+// variants. Owner, GM, and Accountant stand alone next to the three dropdowns since
+// none of them has department-specific variants.
+const MANAGER_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "manager" || r.value.startsWith("manager_"));
+const SUPERVISOR_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "supervisor" || r.value.startsWith("supervisor_"));
+const EMPLOYEE_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "employee" || r.value.startsWith("employee_"));
 const GRADE_TIER_GROUPS = [
   { key: "manager", title: "Manager", roles: MANAGER_GRADES },
   { key: "supervisor", title: "Supervisor", roles: SUPERVISOR_GRADES },
   { key: "employee", title: "Employee", roles: EMPLOYEE_GRADES },
-  { key: "accountant", title: "Accountant", roles: ACCOUNTANT_GRADES },
 ];
 
 // Which of the app's sections (Flights/Hotels/Visa/Transportation/Files) an employee can
@@ -1419,13 +1412,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     link.href = href;
   }, []);
 
-  // ---------- Login history ----------
-  // Every successful login (any account) is appended here, in shared storage, so the
-  // main/admin account can review who signed in, when, and from which account. Regular
-  // employees never see this — it's gated to currentUser.isAdmin wherever it's shown.
-  const [loginHistory, setLoginHistory] = useState([]);
-  const [showLoginHistory, setShowLoginHistory] = useState(false);
-
   // ---------- License / activation ----------
   // Stored centrally (shared storage) so activation applies to every employee,
   // not just the browser it was entered on. null = not loaded from storage yet.
@@ -1532,22 +1518,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
 
   const [showManage, setShowManage] = useState(false);
   const [newEmployee, setNewEmployee] = useState(emptyNewEmployee);
-  const [newEmployeeGradeOpen, setNewEmployeeGradeOpen] = useState(null); // which of the four Grade dropdowns is open on the Add employee page: "manager" | "supervisor" | "employee" | "accountant" | null
-  const gradePickerRef = useRef(null);
-  // Closes the open Grade dropdown as soon as a click lands anywhere outside the
-  // whole grade-picker block (clicking one of the other three dropdown buttons already
-  // switches which one is open via the button's own onClick, so this only needs to
-  // handle clicks that land completely outside).
-  useEffect(() => {
-    if (!newEmployeeGradeOpen) return;
-    const handleClickOutside = (e) => {
-      if (gradePickerRef.current && !gradePickerRef.current.contains(e.target)) {
-        setNewEmployeeGradeOpen(null);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [newEmployeeGradeOpen]);
+  const [newEmployeeGradeOpen, setNewEmployeeGradeOpen] = useState(null); // which of the three Grade dropdowns is open on the Add employee page: "manager" | "supervisor" | "employee" | null
   const [openPermissionsFor, setOpenPermissionsFor] = useState(null); // username, or null if closed
   const [manageError, setManageError] = useState("");
   const [editingUsername, setEditingUsername] = useState(null);
@@ -1818,7 +1789,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   useEffect(() => {
     (async () => {
       try {
-        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, sessionRes, suggestionsRes, setupRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes, loginHistoryRes] = await Promise.all([
+        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, sessionRes, suggestionsRes, setupRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes] = await Promise.all([
           window.storage.get("tickets:list", true).catch(() => null),
           window.storage.get("tickets:hotels", true).catch(() => null),
           window.storage.get("tickets:visas", true).catch(() => null),
@@ -1835,7 +1806,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           window.storage.get("tickets:customerPayments", true).catch(() => null),
           window.storage.get("tickets:treasuryAccounts", true).catch(() => null),
           window.storage.get("tickets:treasuryEntries", true).catch(() => null),
-          window.storage.get("tickets:loginHistory", true).catch(() => null),
         ]);
         const ticketsData = ticketsRes && ticketsRes.value ? JSON.parse(ticketsRes.value) : [];
         const hotelsData = hotelsRes && hotelsRes.value ? JSON.parse(hotelsRes.value) : [];
@@ -1856,7 +1826,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         setCustomerPayments(customerPaymentsRes && customerPaymentsRes.value ? JSON.parse(customerPaymentsRes.value) : []);
         setTreasuryAccounts(treasuryAccountsRes && treasuryAccountsRes.value ? JSON.parse(treasuryAccountsRes.value) : []);
         setTreasuryEntries(treasuryEntriesRes && treasuryEntriesRes.value ? JSON.parse(treasuryEntriesRes.value) : []);
-        setLoginHistory(loginHistoryRes && loginHistoryRes.value ? JSON.parse(loginHistoryRes.value) : []);
         requestsData.forEach((r) => seenRequestIdsRef.current.add(r.id));
         if (licenseRes && licenseRes.value) {
           try {
@@ -1924,7 +1893,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     let cancelled = false;
     const loadCoreData = async () => {
       try {
-        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, suggestionsRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes, loginHistoryRes] = await Promise.all([
+        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, suggestionsRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes] = await Promise.all([
           window.storage.get("tickets:list", true).catch(() => null),
           window.storage.get("tickets:hotels", true).catch(() => null),
           window.storage.get("tickets:visas", true).catch(() => null),
@@ -1939,12 +1908,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           window.storage.get("tickets:customerPayments", true).catch(() => null),
           window.storage.get("tickets:treasuryAccounts", true).catch(() => null),
           window.storage.get("tickets:treasuryEntries", true).catch(() => null),
-          currentUser.isAdmin ? window.storage.get("tickets:loginHistory", true).catch(() => null) : Promise.resolve(null),
         ]);
         if (cancelled) return;
-        if (loginHistoryRes && loginHistoryRes.value) {
-          try { setLoginHistory(JSON.parse(loginHistoryRes.value)); } catch (e) { /* ignore malformed data for this cycle */ }
-        }
         if (expensesRes && expensesRes.value) {
           try { setExpenses(JSON.parse(expensesRes.value)); } catch (e) { /* ignore malformed data for this cycle */ }
         }
@@ -2434,30 +2399,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       await window.storage.set("tickets:employees", JSON.stringify(next), true);
     } catch (e) {
       setManageError("Could not save the employee list, please try again");
-    }
-  };
-
-  // Appends one login event (any account, including the main account) to the shared
-  // login-history log. Best-effort and silent on failure — a logging hiccup should
-  // never block someone from actually signing in. Capped at the most recent 500
-  // entries so the stored record doesn't grow without bound.
-  const LOGIN_HISTORY_LIMIT = 500;
-  const recordLogin = async (user) => {
-    const entry = {
-      username: user.username,
-      name: user.name,
-      isAdmin: !!user.isAdmin,
-      at: Date.now(),
-    };
-    try {
-      const existingRes = await window.storage.get("tickets:loginHistory", true).catch(() => null);
-      const existing = existingRes && existingRes.value ? JSON.parse(existingRes.value) : [];
-      const next = [...existing, entry].slice(-LOGIN_HISTORY_LIMIT);
-      await window.storage.set("tickets:loginHistory", JSON.stringify(next), true);
-      setLoginHistory(next);
-    } catch (e) {
-      // Login history is a convenience/audit feature — failures here must never
-      // block or roll back an otherwise-successful login.
     }
   };
 
@@ -3309,7 +3250,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     await window.storage.set("session:user", admin.username, false);
     sessionStartedAtRef.current = Date.now();
     setCurrentUser({ username: admin.username, name: admin.name, isAdmin: true });
-    recordLogin({ username: admin.username, name: admin.name, isAdmin: true });
     setSetupName(""); setSetupUsername(""); setSetupPassword("");
   };
 
@@ -3339,7 +3279,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     await window.storage.set("session:user", match.username, false);
     sessionStartedAtRef.current = Date.now();
     setCurrentUser({ username: match.username, name: match.name, isAdmin: !!match.isAdmin });
-    recordLogin({ username: match.username, name: match.name, isAdmin: !!match.isAdmin });
     setLoginUsername(""); setLoginPassword("");
     try {
       const lastSectionRes = await window.storage.get(`tickets:lastSection:${match.username}`, false).catch(() => null);
@@ -6302,12 +6241,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   <Lock size={15} />
                 </button>
               )}
-              {currentUser.isAdmin && (
-                <button onClick={() => setShowLoginHistory(!showLoginHistory)} title="Login history"
-                  className="border border-white/20 bg-white/10 hover:bg-white/20 text-white text-sm rounded-2xl p-2 flex items-center justify-center transition-colors">
-                  <History size={15} />
-                </button>
-              )}
               {canManageCompanies && (
                 <button onClick={() => setShowManageCompanies(!showManageCompanies)} title="Manage companies"
                   className="border border-white/20 bg-white/10 hover:bg-white/20 text-white text-sm rounded-2xl p-2 flex items-center justify-center transition-colors">
@@ -6431,56 +6364,6 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           </div>
         )}
 
-        {showLoginHistory && currentUser.isAdmin && (
-          <div
-            className="fixed inset-0 z-50 bg-black/40 flex items-start md:items-center justify-center p-4 overflow-y-auto"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) setShowLoginHistory(false);
-            }}
-          >
-            <div className="bg-white rounded-2xl border border-stone-200 p-4 md:p-5 w-full max-w-lg my-8 md:my-0 max-h-[90vh] overflow-y-auto">
-              <div className="flex items-center justify-between mb-1">
-                <h2 className="font-semibold text-stone-900 flex items-center gap-2">
-                  <History size={16} className="text-teal-800" /> Login history
-                </h2>
-                <button
-                  onClick={() => setShowLoginHistory(false)}
-                  className="text-stone-400 hover:text-stone-600 p-1 -m-1 rounded-lg hover:bg-stone-100"
-                >
-                  <X size={18} />
-                </button>
-              </div>
-              <p className="text-xs text-stone-400 mb-4 mt-3">
-                Visible to the main account only. Shows the most recent {LOGIN_HISTORY_LIMIT} sign-ins across every account, newest first.
-              </p>
-              {loginHistory.length === 0 ? (
-                <p className="text-sm text-stone-400 text-center py-6">No sign-ins recorded yet.</p>
-              ) : (
-                <div className="divide-y divide-stone-100 -mx-1">
-                  {[...loginHistory].reverse().map((entry, idx) => (
-                    <div key={`${entry.username}-${entry.at}-${idx}`} className="flex items-center justify-between gap-3 px-1 py-2.5">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-stone-800 truncate flex items-center gap-1.5">
-                          {entry.name || entry.username}
-                          {entry.isAdmin && (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-900 bg-amber-300 border border-amber-400/50 rounded-full px-1.5 py-0.5 shrink-0">
-                              <ShieldCheck size={10} /> Main
-                            </span>
-                          )}
-                        </p>
-                        <p className="text-xs text-stone-400 truncate">@{entry.username}</p>
-                      </div>
-                      <p className="text-xs text-stone-500 whitespace-nowrap shrink-0">
-                        {entry.at ? new Date(entry.at).toLocaleString() : "—"}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
         {(showManage || showManageCompanies) && (
           <div
             className="fixed inset-0 z-50 bg-black/40 flex items-start md:items-center justify-center p-4 overflow-y-auto"
@@ -6508,8 +6391,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               <Wifi size={13} className="text-emerald-600" />
               {visibleOnlineUsernames.length} of {(employees || []).filter((e) => currentUser.isAdmin || !e.isAdmin).length} employees connected right now
             </p>
-            <div className="border border-stone-200 rounded-xl overflow-hidden mb-4">
-              <table className="w-full text-sm">
+            <div className="border border-stone-200 rounded-xl overflow-x-auto mb-4">
+              <table className="w-full min-w-max text-sm">
                 <thead>
                   <tr className="bg-stone-50 text-stone-500 text-xs">
                     <th className="text-left px-3 py-2 font-medium">Status</th>
@@ -6680,10 +6563,10 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })} />
               </div>
 
-              {/* Grade picker: one dropdown per tier (Manager / Supervisor / Employee /
-                  Accountant), each holding that tier's per-department or per-level variants.
-                  Owner and GM stand alone next to the four dropdowns since neither has any
-                  variants. Picking any option sets that grade's
+              {/* Grade picker: one dropdown per tier (Manager / Supervisor / Employee),
+                  each holding that tier's general grade plus its per-department variants.
+                  Owner, GM, and Accountant stand alone next to the three dropdowns since
+                  none of them has per-department variants. Picking any option sets that grade's
                   starting permissions on newEmployee and immediately closes its dropdown,
                   so the chosen grade shows outside/above the list. Name/username/password
                   above are never touched by any of this — they only get cleared once the
@@ -6691,7 +6574,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   as typed while you pick a grade. Everything can still be fine-tuned
                   afterward from the Permissions screen reached by clicking the employee's
                   name once they've been added. */}
-              <div className="mt-3" ref={gradePickerRef}>
+              <div className="mt-3">
                 <label className="text-xs text-stone-500 block mb-1.5">Grade</label>
                 <div className="flex flex-wrap items-start gap-1.5 pb-1">
                   {GRADE_TIER_GROUPS.map((group) => {
@@ -6743,10 +6626,9 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                     );
                   })}
 
-                  {/* Owner and GM have no per-department variants and no sibling grade
-                      within their tier, so they sit as standalone picks next to the four
-                      tier dropdowns rather than inside one. */}
-                  {["owner", "gm"].map((value) => {
+                  {/* Owner, GM, and Accountant have no per-department variants, so they sit
+                      as standalone picks next to the three tier dropdowns rather than inside one. */}
+                  {["owner", "gm", "accountant"].map((value) => {
                     const selected = newEmployee.role === value;
                     return (
                       <button
@@ -7061,33 +6943,33 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             </span>
           </p>
         </div>
-        <div className="grid grid-cols-4 gap-1.5 sm:gap-3 mb-6">
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="flex overflow-x-auto gap-2 sm:gap-3 mb-6 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory scrollbar-none">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 shrink-0 snap-start basis-[42%] sm:basis-0 sm:flex-1">
             <div className="bg-stone-100 rounded-xl p-1.5 sm:p-2 text-stone-600 shrink-0"><Ticket size={18} className="sm:hidden" /><Ticket size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
-              <p className="text-xs text-stone-500">Tickets</p>
-              <p className="text-sm sm:text-lg font-bold truncate">{totals.count}</p>
+              <p className="text-xs text-stone-500 whitespace-nowrap">Tickets</p>
+              <p className="text-sm sm:text-lg font-bold whitespace-nowrap">{totals.count}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 shrink-0 snap-start basis-[42%] sm:basis-0 sm:flex-1">
             <div className="bg-teal-50 rounded-xl p-1.5 sm:p-2 text-teal-900 shrink-0"><Wallet size={18} className="sm:hidden" /><Wallet size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
-              <p className="text-xs text-stone-500">Total sales</p>
-              <p className="text-sm sm:text-lg font-bold truncate">{fmt(totals.total)}</p>
+              <p className="text-xs text-stone-500 whitespace-nowrap">Total sales</p>
+              <p className="text-sm sm:text-lg font-bold whitespace-nowrap">{fmt(totals.total)}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 shrink-0 snap-start basis-[42%] sm:basis-0 sm:flex-1">
             <div className="bg-amber-50 rounded-xl p-1.5 sm:p-2 text-amber-700 shrink-0"><Receipt size={18} className="sm:hidden" /><Receipt size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
-              <p className="text-xs text-stone-500">Total net</p>
-              <p className="text-sm sm:text-lg font-bold truncate">{fmt(totals.net)}</p>
+              <p className="text-xs text-stone-500 whitespace-nowrap">Total net</p>
+              <p className="text-sm sm:text-lg font-bold whitespace-nowrap">{fmt(totals.net)}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 shrink-0 snap-start basis-[42%] sm:basis-0 sm:flex-1">
             <div className="bg-emerald-50 rounded-xl p-1.5 sm:p-2 text-emerald-700 shrink-0"><TrendingUp size={18} className="sm:hidden" /><TrendingUp size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
-              <p className="text-xs text-stone-500">Total profit</p>
-              <p className="text-sm sm:text-lg font-bold text-emerald-700 truncate">{fmt(totals.profit)}</p>
+              <p className="text-xs text-stone-500 whitespace-nowrap">Total profit</p>
+              <p className="text-sm sm:text-lg font-bold text-emerald-700 whitespace-nowrap">{fmt(totals.profit)}</p>
             </div>
           </div>
         </div>
@@ -7593,7 +7475,54 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+          {/* Mobile layout: date gets its own row (native date inputs can overflow
+              their grid cell on phones), prices share a separate 3-col row. */}
+          <div className="sm:hidden mt-3 w-full min-w-0 overflow-hidden">
+            <label className="text-xs text-stone-500 block mb-1">Ticket issue date</label>
+            <input
+              type="date"
+              lang="en-GB"
+              max={todayDateStr()}
+              className="block w-full max-w-full min-w-0 box-border border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700"
+              style={{ WebkitAppearance: "none" }}
+              value={form.date}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm({ ...form, date: v > todayDateStr() ? todayDateStr() : v });
+              }}
+            />
+          </div>
+          <div className="sm:hidden grid grid-cols-3 gap-2 mt-3">
+            <div>
+              <label className="text-xs text-stone-500 block mb-1">Net price</label>
+              <input
+                type="number"
+                className="w-full border border-stone-300 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 price-input"
+                value={form.netPrice}
+                onChange={(e) => setForm({ ...form, netPrice: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-stone-500 block mb-1">Sold price</label>
+              <input
+                type="number"
+                className="w-full border border-stone-300 rounded-xl px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 price-input"
+                value={form.soldPrice}
+                onChange={(e) => setForm({ ...form, soldPrice: e.target.value })}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-stone-500 block mb-1">Profit (auto)</label>
+              <div className="w-full border border-stone-200 bg-stone-50 rounded-xl px-2 py-2 text-sm text-emerald-700 font-semibold truncate">
+                {fmt(profit(form.netPrice, form.soldPrice))}
+              </div>
+            </div>
+          </div>
+
+          {/* Desktop/tablet layout: date, net, sold, profit back in a single row, as before. */}
+          <div className="hidden sm:grid sm:grid-cols-4 sm:gap-3 sm:mt-3">
             <div>
               <label className="text-xs text-stone-500 block mb-1">Ticket issue date</label>
               <input
@@ -7614,7 +7543,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               <label className="text-xs text-stone-500 block mb-1">Net price</label>
               <input
                 type="number"
-                className="w-28 border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 price-input"
+                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 price-input"
                 value={form.netPrice}
                 onChange={(e) => setForm({ ...form, netPrice: e.target.value })}
                 placeholder="0"
@@ -7624,7 +7553,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               <label className="text-xs text-stone-500 block mb-1">Sold price</label>
               <input
                 type="number"
-                className="w-28 border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 price-input"
+                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 price-input"
                 value={form.soldPrice}
                 onChange={(e) => setForm({ ...form, soldPrice: e.target.value })}
                 placeholder="0"
@@ -7636,15 +7565,16 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 {fmt(profit(form.netPrice, form.soldPrice))}
               </div>
             </div>
-            <div className="col-span-4">
-              <label className="text-xs text-stone-500 block mb-1">Notes</label>
-              <textarea
-                className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 min-h-[80px]"
-                value={form.notes}
-                onChange={(e) => setForm({ ...form, notes: e.target.value.toUpperCase() })}
-                placeholder="Optional"
-              />
-            </div>
+          </div>
+
+          <div className="mt-3">
+            <label className="text-xs text-stone-500 block mb-1">Notes</label>
+            <textarea
+              className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700 min-h-[80px]"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value.toUpperCase() })}
+              placeholder="Optional"
+            />
           </div>
 
           <div className="flex gap-2 mt-4">
@@ -10748,8 +10678,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 className="w-full border border-stone-300 rounded-xl pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700"
               />
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-xs">
                   <tr>
                     <th className="text-right px-3 py-2 font-medium">{at("colSupplier")}</th>
@@ -10795,8 +10725,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 className="w-full border border-stone-300 rounded-xl pr-9 pl-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700"
               />
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-xs">
                   <tr>
                     <th className="text-right px-3 py-2 font-medium">{at("colCustomer")}</th>
@@ -10887,8 +10817,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 </button>
               </div>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-xs">
                   <tr>
                     <th className="text-right px-3 py-2 font-medium">{at("colDate")}</th>
@@ -10960,8 +10890,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 <Plus size={14} /> {at("addExpense")}
               </button>
             </div>
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-xs">
                   <tr>
                     <th className="text-right px-3 py-2 font-medium">{at("colDate")}</th>
@@ -11058,8 +10988,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             </div>
 
             <h3 className="text-sm font-bold text-stone-700 mb-2">{at("expensesByCategory")}</h3>
-            <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="bg-white rounded-2xl border border-stone-200 overflow-x-auto">
+              <table className="w-full min-w-max text-sm">
                 <thead className="bg-stone-50 text-stone-500 text-xs">
                   <tr>
                     <th className="text-right px-3 py-2 font-medium">{at("colCategory")}</th>
@@ -11260,8 +11190,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 <p className="text-xs text-stone-400 mb-2">
                   Customers ({getCustomers(viewingTicket).length})
                 </p>
-                <div className="border border-stone-200 rounded-xl overflow-hidden">
-                  <table className="w-full text-sm">
+                <div className="border border-stone-200 rounded-xl overflow-x-auto">
+                  <table className="w-full min-w-max text-sm">
                     <thead>
                       <tr className="bg-stone-50 text-stone-500 text-xs">
                         <th className="text-left px-3 py-2 font-medium">Customer</th>
