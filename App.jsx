@@ -714,8 +714,9 @@ const EMPLOYEE_ROLES = [
   { value: "supervisor", label: "Supervisor" },
   { value: "employee", label: "Employee" },
   { value: "owner", label: "Owner" },
-  { value: "gm", label: "GM" },
+  { value: "gm", label: "General Manager" },
   { value: "accountant", label: "Accountant" },
+  { value: "accounting_manager", label: "Accounts Manager" },
   ...SECTIONS_WITH_EMPLOYEE_GRADE.map((s) => ({ value: `employee_${s}`, label: EMPLOYEE_GRADE_LABELS[s] || `${SECTION_ROLE_LABELS[s]} Employee` })),
   ...SECTIONS_WITH_SUPERVISOR_GRADE.map((s) => ({ value: `supervisor_${s}`, label: SUPERVISOR_GRADE_LABELS[s] || `${SECTION_ROLE_LABELS[s]} Supervisor` })),
   ...SECTIONS_WITH_MANAGER_GRADE.map((s) => ({ value: `manager_${s}`, label: MANAGER_GRADE_LABELS[s] || `${SECTION_ROLE_LABELS[s]} Manager` })),
@@ -737,6 +738,9 @@ const ROLE_PRESETS = {
   supervisor: { canViewAll: true, canAdd: true, canEdit: true, canDelete: false, isAccounting: false, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   employee: { canViewAll: false, canAdd: true, canEdit: false, canDelete: false, isAccounting: false, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   accountant: { canViewAll: true, canAdd: false, canEdit: false, canDelete: false, isAccounting: true, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
+  // Accounts Manager: same accounting-only scope as Accountant, but with edit/delete
+  // rights on top of it — the senior grade within the accounting tier.
+  accounting_manager: { canViewAll: true, canAdd: false, canEdit: true, canDelete: true, isAccounting: true, canManageCompanies: false, isOwner: false, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   owner: { canViewAll: true, canAdd: true, canEdit: true, canDelete: true, isAccounting: false, canManageCompanies: true, isOwner: true, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   gm: { canViewAll: true, canAdd: true, canEdit: true, canDelete: true, isAccounting: false, canManageCompanies: true, isOwner: true, sections: { ...ALL_SECTIONS_ON }, sectionPerms: {} },
   ...Object.fromEntries(SECTIONS_WITH_EMPLOYEE_GRADE.map((s) => [`employee_${s}`, sectionRolePreset(s, "employee")])),
@@ -746,19 +750,22 @@ const ROLE_PRESETS = {
 
 const roleLabel = (value) => (EMPLOYEE_ROLES.find((r) => r.value === value) || {}).label || "Employee";
 
-// Grade picker on the Add employee page groups the 17 grades into three per-tier
-// dropdowns (Manager / Supervisor / Employee). Supervisor and Employee each also hold
-// a general, all-section grade alongside their per-department variants; Manager no
-// longer has a general grade, so its dropdown holds only the four per-department
-// variants. Owner, GM, and Accountant stand alone next to the three dropdowns since
-// none of them has department-specific variants.
-const MANAGER_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "manager" || r.value.startsWith("manager_"));
-const SUPERVISOR_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "supervisor" || r.value.startsWith("supervisor_"));
-const EMPLOYEE_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "employee" || r.value.startsWith("employee_"));
+// Grade picker on the Add employee page groups the 18 grades into four per-tier
+// dropdowns (Manager / Supervisor / Employee / Accountant). Supervisor and Employee
+// no longer offer a general, all-section grade — same as Manager — so every pick in
+// those three dropdowns is tied to a specific department. Accountant holds its two
+// grades (Accountant, Accounts Manager), neither of which has department variants.
+// Owner and GM have no variants of any kind, so they stand alone next to the four
+// dropdowns.
+const MANAGER_GRADES = EMPLOYEE_ROLES.filter((r) => r.value.startsWith("manager_"));
+const SUPERVISOR_GRADES = EMPLOYEE_ROLES.filter((r) => r.value.startsWith("supervisor_"));
+const EMPLOYEE_GRADES = EMPLOYEE_ROLES.filter((r) => r.value.startsWith("employee_"));
+const ACCOUNTANT_GRADES = EMPLOYEE_ROLES.filter((r) => r.value === "accountant" || r.value === "accounting_manager");
 const GRADE_TIER_GROUPS = [
   { key: "manager", title: "Manager", roles: MANAGER_GRADES },
   { key: "supervisor", title: "Supervisor", roles: SUPERVISOR_GRADES },
   { key: "employee", title: "Employee", roles: EMPLOYEE_GRADES },
+  { key: "accountant", title: "Accountant", roles: ACCOUNTANT_GRADES },
 ];
 
 // Which of the app's sections (Flights/Hotels/Visa/Transportation/Files) an employee can
@@ -6658,10 +6665,10 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   onChange={(e) => setNewEmployee({ ...newEmployee, password: e.target.value })} />
               </div>
 
-              {/* Grade picker: one dropdown per tier (Manager / Supervisor / Employee),
-                  each holding that tier's general grade plus its per-department variants.
-                  Owner, GM, and Accountant stand alone next to the three dropdowns since
-                  none of them has per-department variants. Picking any option sets that grade's
+              {/* Grade picker: one dropdown per tier (Manager / Supervisor / Employee /
+                  Accountant), each holding that tier's per-department or per-level variants.
+                  Owner and GM stand alone next to the four dropdowns since neither has any
+                  variants. Picking any option sets that grade's
                   starting permissions on newEmployee and immediately closes its dropdown,
                   so the chosen grade shows outside/above the list. Name/username/password
                   above are never touched by any of this — they only get cleared once the
@@ -6721,9 +6728,10 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                     );
                   })}
 
-                  {/* Owner, GM, and Accountant have no per-department variants, so they sit
-                      as standalone picks next to the three tier dropdowns rather than inside one. */}
-                  {["owner", "gm", "accountant"].map((value) => {
+                  {/* Owner and GM have no per-department variants and no sibling grade
+                      within their tier, so they sit as standalone picks next to the four
+                      tier dropdowns rather than inside one. */}
+                  {["owner", "gm"].map((value) => {
                     const selected = newEmployee.role === value;
                     return (
                       <button
