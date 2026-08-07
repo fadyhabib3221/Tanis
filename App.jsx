@@ -1412,6 +1412,13 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     link.href = href;
   }, []);
 
+  // ---------- Login history ----------
+  // Every successful login (any account) is appended here, in shared storage, so the
+  // main/admin account can review who signed in, when, and from which account. Regular
+  // employees never see this — it's gated to currentUser.isAdmin wherever it's shown.
+  const [loginHistory, setLoginHistory] = useState([]);
+  const [showLoginHistory, setShowLoginHistory] = useState(false);
+
   // ---------- License / activation ----------
   // Stored centrally (shared storage) so activation applies to every employee,
   // not just the browser it was entered on. null = not loaded from storage yet.
@@ -1789,7 +1796,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   useEffect(() => {
     (async () => {
       try {
-        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, sessionRes, suggestionsRes, setupRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes] = await Promise.all([
+        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, sessionRes, suggestionsRes, setupRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes, loginHistoryRes] = await Promise.all([
           window.storage.get("tickets:list", true).catch(() => null),
           window.storage.get("tickets:hotels", true).catch(() => null),
           window.storage.get("tickets:visas", true).catch(() => null),
@@ -1806,6 +1813,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           window.storage.get("tickets:customerPayments", true).catch(() => null),
           window.storage.get("tickets:treasuryAccounts", true).catch(() => null),
           window.storage.get("tickets:treasuryEntries", true).catch(() => null),
+          window.storage.get("tickets:loginHistory", true).catch(() => null),
         ]);
         const ticketsData = ticketsRes && ticketsRes.value ? JSON.parse(ticketsRes.value) : [];
         const hotelsData = hotelsRes && hotelsRes.value ? JSON.parse(hotelsRes.value) : [];
@@ -1826,6 +1834,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         setCustomerPayments(customerPaymentsRes && customerPaymentsRes.value ? JSON.parse(customerPaymentsRes.value) : []);
         setTreasuryAccounts(treasuryAccountsRes && treasuryAccountsRes.value ? JSON.parse(treasuryAccountsRes.value) : []);
         setTreasuryEntries(treasuryEntriesRes && treasuryEntriesRes.value ? JSON.parse(treasuryEntriesRes.value) : []);
+        setLoginHistory(loginHistoryRes && loginHistoryRes.value ? JSON.parse(loginHistoryRes.value) : []);
         requestsData.forEach((r) => seenRequestIdsRef.current.add(r.id));
         if (licenseRes && licenseRes.value) {
           try {
@@ -1893,7 +1902,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     let cancelled = false;
     const loadCoreData = async () => {
       try {
-        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, suggestionsRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes] = await Promise.all([
+        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, suggestionsRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes, loginHistoryRes] = await Promise.all([
           window.storage.get("tickets:list", true).catch(() => null),
           window.storage.get("tickets:hotels", true).catch(() => null),
           window.storage.get("tickets:visas", true).catch(() => null),
@@ -1908,8 +1917,12 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           window.storage.get("tickets:customerPayments", true).catch(() => null),
           window.storage.get("tickets:treasuryAccounts", true).catch(() => null),
           window.storage.get("tickets:treasuryEntries", true).catch(() => null),
+          currentUser.isAdmin ? window.storage.get("tickets:loginHistory", true).catch(() => null) : Promise.resolve(null),
         ]);
         if (cancelled) return;
+        if (loginHistoryRes && loginHistoryRes.value) {
+          try { setLoginHistory(JSON.parse(loginHistoryRes.value)); } catch (e) { /* ignore malformed data for this cycle */ }
+        }
         if (expensesRes && expensesRes.value) {
           try { setExpenses(JSON.parse(expensesRes.value)); } catch (e) { /* ignore malformed data for this cycle */ }
         }
@@ -2399,6 +2412,30 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       await window.storage.set("tickets:employees", JSON.stringify(next), true);
     } catch (e) {
       setManageError("Could not save the employee list, please try again");
+    }
+  };
+
+  // Appends one login event (any account, including the main account) to the shared
+  // login-history log. Best-effort and silent on failure — a logging hiccup should
+  // never block someone from actually signing in. Capped at the most recent 500
+  // entries so the stored record doesn't grow without bound.
+  const LOGIN_HISTORY_LIMIT = 500;
+  const recordLogin = async (user) => {
+    const entry = {
+      username: user.username,
+      name: user.name,
+      isAdmin: !!user.isAdmin,
+      at: Date.now(),
+    };
+    try {
+      const existingRes = await window.storage.get("tickets:loginHistory", true).catch(() => null);
+      const existing = existingRes && existingRes.value ? JSON.parse(existingRes.value) : [];
+      const next = [...existing, entry].slice(-LOGIN_HISTORY_LIMIT);
+      await window.storage.set("tickets:loginHistory", JSON.stringify(next), true);
+      setLoginHistory(next);
+    } catch (e) {
+      // Login history is a convenience/audit feature — failures here must never
+      // block or roll back an otherwise-successful login.
     }
   };
 
@@ -3250,6 +3287,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     await window.storage.set("session:user", admin.username, false);
     sessionStartedAtRef.current = Date.now();
     setCurrentUser({ username: admin.username, name: admin.name, isAdmin: true });
+    recordLogin({ username: admin.username, name: admin.name, isAdmin: true });
     setSetupName(""); setSetupUsername(""); setSetupPassword("");
   };
 
@@ -3279,6 +3317,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     await window.storage.set("session:user", match.username, false);
     sessionStartedAtRef.current = Date.now();
     setCurrentUser({ username: match.username, name: match.name, isAdmin: !!match.isAdmin });
+    recordLogin({ username: match.username, name: match.name, isAdmin: !!match.isAdmin });
     setLoginUsername(""); setLoginPassword("");
     try {
       const lastSectionRes = await window.storage.get(`tickets:lastSection:${match.username}`, false).catch(() => null);
@@ -6241,6 +6280,12 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   <Lock size={15} />
                 </button>
               )}
+              {currentUser.isAdmin && (
+                <button onClick={() => setShowLoginHistory(!showLoginHistory)} title="Login history"
+                  className="border border-white/20 bg-white/10 hover:bg-white/20 text-white text-sm rounded-2xl p-2 flex items-center justify-center transition-colors">
+                  <History size={15} />
+                </button>
+              )}
               {canManageCompanies && (
                 <button onClick={() => setShowManageCompanies(!showManageCompanies)} title="Manage companies"
                   className="border border-white/20 bg-white/10 hover:bg-white/20 text-white text-sm rounded-2xl p-2 flex items-center justify-center transition-colors">
@@ -6360,6 +6405,56 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 className="w-full mt-4 bg-gradient-to-b from-teal-700 to-teal-900 hover:from-teal-600 hover:to-teal-800 text-white text-sm font-semibold rounded-xl px-4 py-2 shadow-sm shadow-teal-800/30 ring-1 ring-inset ring-white/10 transition-colors disabled:opacity-60">
                 {licenseSaving ? "Saving..." : "Activate"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {showLoginHistory && currentUser.isAdmin && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 flex items-start md:items-center justify-center p-4 overflow-y-auto"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowLoginHistory(false);
+            }}
+          >
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 md:p-5 w-full max-w-lg my-8 md:my-0 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between mb-1">
+                <h2 className="font-semibold text-stone-900 flex items-center gap-2">
+                  <History size={16} className="text-teal-800" /> Login history
+                </h2>
+                <button
+                  onClick={() => setShowLoginHistory(false)}
+                  className="text-stone-400 hover:text-stone-600 p-1 -m-1 rounded-lg hover:bg-stone-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-stone-400 mb-4 mt-3">
+                Visible to the main account only. Shows the most recent {LOGIN_HISTORY_LIMIT} sign-ins across every account, newest first.
+              </p>
+              {loginHistory.length === 0 ? (
+                <p className="text-sm text-stone-400 text-center py-6">No sign-ins recorded yet.</p>
+              ) : (
+                <div className="divide-y divide-stone-100 -mx-1">
+                  {[...loginHistory].reverse().map((entry, idx) => (
+                    <div key={`${entry.username}-${entry.at}-${idx}`} className="flex items-center justify-between gap-3 px-1 py-2.5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-stone-800 truncate flex items-center gap-1.5">
+                          {entry.name || entry.username}
+                          {entry.isAdmin && (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-teal-900 bg-amber-300 border border-amber-400/50 rounded-full px-1.5 py-0.5 shrink-0">
+                              <ShieldCheck size={10} /> Main
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-stone-400 truncate">@{entry.username}</p>
+                      </div>
+                      <p className="text-xs text-stone-500 whitespace-nowrap shrink-0">
+                        {entry.at ? new Date(entry.at).toLocaleString() : "—"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
