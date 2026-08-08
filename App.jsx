@@ -13,7 +13,7 @@ import {
   ShieldCheck, Wifi, User, Cloud, Globe2, List, Car, FileText, ArrowLeft,
   MapPin, Compass, Luggage, Anchor, Sparkles, Plus, Printer, SlidersHorizontal, ChevronDown,
   History, Bell, Send, Landmark, Receipt, PieChart, ArrowUpCircle, ArrowDownCircle,
-  Banknote, HandCoins, ClipboardList, Globe, ScrollText,
+  Banknote, HandCoins, ClipboardList, Globe, ScrollText, KeyRound,
 } from "lucide-react";
 
 // A small passport-shaped icon (booklet with a globe emblem) for the Visa section, drawn
@@ -1479,7 +1479,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   const [currentUser, setCurrentUser] = useState(null); // { username, name, isAdmin }
   const [loading, setLoading] = useState(true);
 
-  // Activity log ("سجل النشاط") — an admin-only audit trail of who did what and when
+  // Activity log — an admin-only audit trail of who did what and when
   // across tickets, hotel/visa bookings, employee accounts, and login/logout. Kept in
   // shared storage like the rest of the app's data (see logActivity below) so every main
   // account sees the same trail regardless of which device made the change.
@@ -2814,7 +2814,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         h.id === hotelEditingId ? { ...h, ...hotelForm, id: hotelEditingId } : h
       );
       await persistHotelBookings(next);
-      logActivity("hotel", "تعديل حجز فندق", hotelForm.hotel);
+      logActivity("hotel", "Edited hotel booking", hotelForm.hotel);
     } else {
       const record = {
         ...hotelForm,
@@ -2823,7 +2823,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         employeeUsername: currentUser.username,
       };
       await persistHotelBookings([record, ...hotelBookings]);
-      logActivity("hotel", "إضافة حجز فندق", record.hotel);
+      logActivity("hotel", "Added hotel booking", record.hotel);
     }
     resetHotelForm();
   };
@@ -2863,7 +2863,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     requestConfirm("Delete this hotel booking? This cannot be undone.", async () => {
       const target = hotelBookings.find((h) => h.id === id);
       await persistHotelBookings(hotelBookings.filter((h) => h.id !== id));
-      logActivity("hotel", "حذف حجز فندق", target ? target.hotel : "");
+      logActivity("hotel", "Deleted hotel booking", target ? target.hotel : "");
       if (hotelEditingId === id) resetHotelForm();
       setConfirmDialog(null);
       if (onDeleted) onDeleted();
@@ -2944,7 +2944,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     if (visaEditingId) {
       const next = visaBookings.map((v) => (v.id === visaEditingId ? { ...v, ...visaForm, id: visaEditingId } : v));
       await persistVisaBookings(next);
-      logActivity("visa", "تعديل حجز فيزا", visaForm.visaType);
+      logActivity("visa", "Edited visa booking", visaForm.visaType);
     } else {
       const record = {
         ...visaForm,
@@ -2953,7 +2953,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         employeeUsername: currentUser.username,
       };
       await persistVisaBookings([record, ...visaBookings]);
-      logActivity("visa", "إضافة حجز فيزا", record.visaType);
+      logActivity("visa", "Added visa booking", record.visaType);
     }
     resetVisaForm();
   };
@@ -2979,7 +2979,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     requestConfirm("Delete this visa booking? This cannot be undone.", async () => {
       const target = visaBookings.find((v) => v.id === id);
       await persistVisaBookings(visaBookings.filter((v) => v.id !== id));
-      logActivity("visa", "حذف حجز فيزا", target ? target.visaType : "");
+      logActivity("visa", "Deleted visa booking", target ? target.visaType : "");
       if (visaEditingId === id) resetVisaForm();
       setConfirmDialog(null);
       if (onDeleted) onDeleted();
@@ -3403,7 +3403,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     await window.storage.set("session:user", match.username, false);
     sessionStartedAtRef.current = Date.now();
     setCurrentUser({ username: match.username, name: match.name, isAdmin: !!match.isAdmin });
-    logActivity("auth", "تسجيل دخول", "", { name: match.name, username: match.username });
+    logActivity("auth", "Logged in", "", { name: match.name, username: match.username });
     setLoginUsername(""); setLoginPassword("");
     try {
       const lastSectionRes = await window.storage.get(`tickets:lastSection:${match.username}`, false).catch(() => null);
@@ -3417,7 +3417,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   };
 
   const handleLogout = async () => {
-    logActivity("auth", "تسجيل خروج");
+    logActivity("auth", "Logged out");
     await window.storage.delete("session:user", false).catch(() => {});
     setCurrentUser(null);
     setShowManage(false);
@@ -3468,7 +3468,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       },
     ];
     await persistEmployees(next);
-    logActivity("employee", "إضافة موظف جديد", `${newEmployee.name.trim()} (${newEmployee.username.trim()})`);
+    logActivity("employee", "Added new employee", `${newEmployee.name.trim()} (${newEmployee.username.trim()})`);
     setNewEmployee(emptyNewEmployee);
     setShowNewEmployeePerms(false);
   };
@@ -3487,7 +3487,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     );
     await persistEmployees(next);
     const target = (employees || []).find((e) => e.username === username);
-    logActivity("employee", "تغيير درجة موظف", `${target ? target.name : username} — ${roleLabel(role)}`);
+    logActivity("employee", "Changed employee grade", `${target ? target.name : username} — ${roleLabel(role)}`);
   };
 
   // Single generic handler for every individual permission toggle (view all tickets,
@@ -3505,7 +3505,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     );
     await persistEmployees(next);
     const target = (employees || []).find((e) => e.username === username);
-    logActivity("employee", "تعديل صلاحيات موظف", `${target ? target.name : username} — ${field}: ${checked ? "on" : "off"}`);
+    logActivity("employee", "Changed employee permission", `${target ? target.name : username} — ${field}: ${checked ? "on" : "off"}`);
   };
 
   // Toggles one section (Flights/Hotels/Visa/Transportation/Files) on or off for an
@@ -3520,7 +3520,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     );
     await persistEmployees(next);
     const target = (employees || []).find((e) => e.username === username);
-    logActivity("employee", "تعديل أقسام موظف", `${target ? target.name : username} — ${section}: ${checked ? "on" : "off"}`);
+    logActivity("employee", "Changed employee section access", `${target ? target.name : username} — ${section}: ${checked ? "on" : "off"}`);
   };
 
   // Sets one of View all services / Edit / Delete for one specific section (Flights,
@@ -3539,7 +3539,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     });
     await persistEmployees(next);
     const target = (employees || []).find((e) => e.username === username);
-    logActivity("employee", "تعديل صلاحيات قسم لموظف", `${target ? target.name : username} — ${section}/${field}: ${checked ? "on" : "off"}`);
+    logActivity("employee", "Changed employee section permission", `${target ? target.name : username} — ${section}/${field}: ${checked ? "on" : "off"}`);
   };
 
   // Promotes an employee to a main/admin account. Any main account can promote another one.
@@ -3557,7 +3557,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           e.username === username ? { ...e, isAdmin: true } : e
         );
         await persistEmployees(next);
-        logActivity("employee", "ترقية موظف لحساب رئيسي", target.name);
+        logActivity("employee", "Promoted employee to main account", target.name);
         setConfirmDialog(null);
       }
     );
@@ -3581,7 +3581,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         e.username === username ? { ...e, isAdmin: false } : e
       );
       await persistEmployees(next);
-      logActivity("employee", "إلغاء صلاحية الحساب الرئيسي", target.name);
+      logActivity("employee", "Removed main-account access", target.name);
       // If the admin demoted themselves, drop their manage-panel view since they're no longer main
       if (username === currentUser.username) {
         setCurrentUser({ ...currentUser, isAdmin: false });
@@ -3602,7 +3602,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     }
     const target = (employees || []).find((e) => e.username === username);
     await persistEmployees((employees || []).filter((e) => e.username !== username));
-    logActivity("employee", "حذف موظف", target ? `${target.name} (${target.username})` : username);
+    logActivity("employee", "Deleted employee", target ? `${target.name} (${target.username})` : username);
   };
 
   const startEditEmployee = (emp) => {
@@ -3650,7 +3650,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         : e
     );
     await persistEmployees(next);
-    logActivity("employee", "تعديل بيانات موظف", `${trimmedName} (${trimmedUsername})`);
+    logActivity("employee", "Edited employee account", `${trimmedName} (${trimmedUsername})`);
 
     // If the main account edited its own account, keep the current session in sync
     if (editingUsername === currentUser.username) {
@@ -3689,7 +3689,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         : e
     );
     await persistEmployees(next);
-    logActivity("employee", "تعديل بيانات موظف", `${trimmedName} (${trimmedUsername})`);
+    logActivity("employee", "Edited employee account", `${trimmedName} (${trimmedUsername})`);
 
     // If the main account edited its own account, keep the current session in sync
     if (username === currentUser.username) {
@@ -3927,7 +3927,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       persistTickets(next);
       const customerName = (record.customers && record.customers[0] && record.customers[0].name) || record.customer || "";
       const route = record.multiDestination ? (record.destinations || []).join(" → ") : `${record.from || ""} → ${record.to || ""}`;
-      logActivity("ticket", wasEditing ? "تعديل تذكرة" : "إضافة تذكرة", `${customerName} — ${route}`);
+      logActivity("ticket", wasEditing ? "Edited ticket" : "Added ticket", `${customerName} — ${route}`);
       rememberSuggestionsFromRecord(record);
       if (wasEditing) showActionToast("Ticket updated");
       setForm(getEmptyForm());
@@ -3972,7 +3972,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       const target = tickets.find((t) => t.id === id);
       const targetName = target ? ((target.customers && target.customers[0] && target.customers[0].name) || target.customer || "") : "";
       persistTickets(tickets.filter((t) => t.id !== id));
-      logActivity("ticket", "حذف تذكرة", targetName);
+      logActivity("ticket", "Deleted ticket", targetName);
       if (afterConfirm) afterConfirm();
     });
   };
@@ -4461,7 +4461,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   const hasAdminAccess = !!currentUser && (currentUser.isAdmin || isOwnerUser);
   // Labels for the activity log's filter chips and per-row type badge.
   const ACTIVITY_LOG_TYPE_LABELS = {
-    all: "الكل", ticket: "تذاكر", hotel: "فنادق", visa: "فيزا", employee: "موظفين", auth: "دخول وخروج",
+    all: "All", ticket: "Tickets", hotel: "Hotels", visa: "Visa", employee: "Employees", auth: "Login/Logout",
   };
   const filteredActivityLog = (activityLog || []).filter((entry) => {
     if (activityLogFilter !== "all" && entry.type !== activityLogFilter) return false;
@@ -6419,7 +6419,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                       ? "border-white/20 bg-white/10 hover:bg-white/20 text-white"
                       : "border-amber-300/50 bg-amber-500/20 hover:bg-amber-500/30 text-amber-100"
                   }`}>
-                  <Lock size={15} />
+                  <KeyRound size={15} />
                 </button>
               )}
               {canManageCompanies && (
@@ -6429,7 +6429,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 </button>
               )}
               {currentUser.isAdmin && (
-                <button onClick={() => setShowActivityLog(!showActivityLog)} title="سجل النشاط"
+                <button onClick={() => setShowActivityLog(!showActivityLog)} title="Activity log"
                   className="border border-white/20 bg-white/10 hover:bg-white/20 text-white text-sm rounded-2xl p-2 flex items-center justify-center transition-colors">
                   <ScrollText size={15} />
                 </button>
@@ -6506,7 +6506,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             <div className="bg-white rounded-2xl border border-stone-200 p-4 md:p-5 w-full max-w-sm my-8 md:my-0 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between mb-1">
                 <h2 className="font-semibold text-stone-900 flex items-center gap-2">
-                  <Lock size={16} className="text-teal-800" /> App license
+                  <KeyRound size={16} className="text-teal-800" /> App license
                 </h2>
                 <button
                   onClick={() => { setShowLicensePanel(false); setLicenseError(""); setLicenseInput(""); }}
@@ -6561,7 +6561,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             <div className="bg-white rounded-2xl border border-stone-200 p-4 md:p-5 w-full max-w-2xl my-8 md:my-0 max-h-[90vh] overflow-y-auto flex flex-col">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-semibold text-stone-900 flex items-center gap-2">
-                  <ScrollText size={16} className="text-teal-800" /> سجل النشاط
+                  <ScrollText size={16} className="text-teal-800" /> Activity Log
                 </h2>
                 <button
                   onClick={() => setShowActivityLog(false)}
@@ -6571,14 +6571,14 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 </button>
               </div>
               <p className="text-xs text-stone-400 mb-3">
-                سجل بكل الإضافات والتعديلات والحذف على التذاكر وحجوزات الفنادق والفيزا، وحسابات الموظفين، بالإضافة لتسجيل الدخول والخروج. مرئي للحساب الرئيسي فقط.
+                A log of every addition, edit, and deletion across tickets, hotel and visa bookings, and employee accounts, plus every login and logout. Visible to the main account only.
               </p>
               <div className="flex items-center gap-2 mb-3">
                 <Search size={15} className="text-stone-400 shrink-0" />
                 <input
                   value={activityLogSearch}
                   onChange={(e) => setActivityLogSearch(e.target.value)}
-                  placeholder="بحث بالاسم أو الوصف..."
+                  placeholder="Search by name or description..."
                   className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700"
                 />
               </div>
@@ -6599,7 +6599,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               </div>
               <div className="flex-1 overflow-y-auto -mx-1 px-1">
                 {filteredActivityLog.length === 0 ? (
-                  <p className="text-sm text-stone-400 text-center py-10">لا يوجد نشاط مسجل يطابق البحث</p>
+                  <p className="text-sm text-stone-400 text-center py-10">No activity found matching your search</p>
                 ) : (
                   <div className="space-y-2">
                     {filteredActivityLog.map((entry) => (
