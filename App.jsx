@@ -1772,6 +1772,27 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   // "hotels" and "cars" are placeholders for future sections.
   const [activeSection, setActiveSection] = useState("flights");
 
+  // The section-switcher tabs and the totals cards are horizontally scrollable
+  // strips (overflow-x-auto) so they fit on narrow phone screens. Some mobile
+  // browsers (notably iOS Safari) remember and restore an inner element's
+  // scroll offset across a page refresh, so on reload the strip can reopen
+  // already scrolled partway — showing cards cut off on both edges instead of
+  // starting flush at the first card. Force both strips back to scrollLeft 0
+  // whenever the app (re)mounts or the active section changes.
+  const sectionSwitcherScrollRef = useRef(null);
+  const totalsScrollRef = useRef(null);
+  useEffect(() => {
+    const resetHorizontalScroll = () => {
+      if (sectionSwitcherScrollRef.current) sectionSwitcherScrollRef.current.scrollLeft = 0;
+      if (totalsScrollRef.current) totalsScrollRef.current.scrollLeft = 0;
+    };
+    resetHorizontalScroll();
+    // Some browsers restore the scroll offset slightly after mount/paint, so
+    // re-apply once more on the next tick to win against that restoration.
+    const t = setTimeout(resetHorizontalScroll, 60);
+    return () => clearTimeout(t);
+  }, [activeSection]);
+
   // Remembers which section (flights/hotels/cars/files) this account was on, so a page
   // refresh returns to the same place instead of resetting to Flights. Skipped on the
   // very first render for a session, since that value was just restored from storage
@@ -6802,7 +6823,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         {isLicensed ? (
         <>
         {/* Top-level section switcher */}
-        <div className="flex items-center gap-2 md:gap-3 mb-6 overflow-x-auto md:justify-center md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0">
+        <div ref={sectionSwitcherScrollRef} className="flex items-center gap-2 md:gap-3 mb-6 overflow-x-auto md:justify-center md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0">
           {mySections.flights && (
           <button
             onClick={() => setActiveSection("flights")}
@@ -6943,7 +6964,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             </span>
           </p>
         </div>
-        <div className="flex overflow-x-auto gap-2 sm:gap-3 mb-6 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory scrollbar-none">
+        <div ref={totalsScrollRef} className="flex overflow-x-auto gap-2 sm:gap-3 mb-6 pb-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory scrollbar-none">
           <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 shrink-0 snap-start basis-[42%] sm:basis-0 sm:flex-1">
             <div className="bg-stone-100 rounded-xl p-1.5 sm:p-2 text-stone-600 shrink-0"><Ticket size={18} className="sm:hidden" /><Ticket size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
