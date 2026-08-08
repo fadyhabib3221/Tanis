@@ -12,6 +12,29 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Force the page back to 1x zoom on every load/refresh (and on iOS "back-forward
+      // cache" restores, which don't fire a normal load event). This does NOT disable
+      // pinch-zoom — the user can still zoom in freely; it only resets the zoom level
+      // each time the page is (re)loaded.
+      (function () {
+        var viewport = document.querySelector('meta[name="viewport"]');
+        if (!viewport) return;
+        var normalContent = viewport.getAttribute("content");
+
+        function resetZoom() {
+          // Briefly cap the max scale to force the browser to snap back to 1x,
+          // then restore the original (unrestricted) viewport so zooming stays available.
+          viewport.setAttribute("content", normalContent + ", maximum-scale=1.0");
+          setTimeout(function () {
+            viewport.setAttribute("content", normalContent);
+          }, 350);
+        }
+
+        window.addEventListener("load", resetZoom);
+        window.addEventListener("pageshow", resetZoom);
+      })();
+    </script>
     <script type="module" src="/main.jsx"></script>
   </body>
 </html>

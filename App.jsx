@@ -6166,8 +6166,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           )}
           <header className="relative flex items-center justify-between flex-wrap gap-3 px-4 py-4 md:px-6">
             <div className="flex items-center gap-3">
-              <div className="bg-white rounded-2xl px-3 py-1.5 shadow-sm shrink-0 hidden sm:block">
-                <img src={LOGO_DATA_URL} alt="TANIS International Travel" className="w-[190px] h-[50px] md:w-[230px] md:h-[60px] object-contain" />
+              <div className="bg-white rounded-2xl px-3 py-1.5 shadow-sm shrink-0 block">
+                <img src={LOGO_DATA_URL} alt="TANIS International Travel" className="w-[110px] h-[30px] sm:w-[190px] sm:h-[50px] md:w-[230px] md:h-[60px] object-contain" />
               </div>
               <div>
                 <h1 className="text-lg md:text-2xl font-semibold text-white" style={{ fontFamily: "'Fraunces', serif" }}>
