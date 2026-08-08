@@ -1375,6 +1375,29 @@ function MultiSelectDropdown({ label, icon: Icon, options, selected, onChange, p
 }
 
 export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
+  // On mobile, if the person pinch-zooms in and then refreshes the page, iOS
+  // Safari (and some Android browsers) keep the app stuck at that zoomed-in
+  // scale after reload instead of resetting to 100%. Toggling the viewport
+  // meta tag's content right after mount forces the browser to recompute and
+  // snap the zoom back to 1, then restores the tag to its normal value.
+  useEffect(() => {
+    let meta = document.querySelector('meta[name="viewport"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "viewport";
+      document.head.appendChild(meta);
+    }
+    const normalContent = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
+    const originalContent = meta.getAttribute("content");
+    // Briefly clamp min/max scale to force a reset of any lingering pinch-zoom,
+    // then restore the app's normal (still non-zoomable) viewport settings.
+    meta.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no");
+    const t = setTimeout(() => {
+      meta.setAttribute("content", originalContent || normalContent);
+    }, 350);
+    return () => clearTimeout(t);
+  }, []);
+
   // Prevent the mouse/trackpad scroll wheel from changing the value of a focused
   // number input. Browsers normally let scrolling over a focused number field
   // bump its value up/down, which is easy to trigger by accident while scrolling
