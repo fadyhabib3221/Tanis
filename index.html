@@ -12,6 +12,49 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Some mobile browsers (especially iOS Safari) remember the pinch-zoom level per
+      // tab/session and silently re-apply it a moment AFTER the page has loaded — which
+      // is why just toggling the viewport meta tag once on "load" isn't enough. This
+      // watches for that async re-apply (via the visualViewport "resize" event, which
+      // fires when the zoom level changes) and forces it back to 1x whenever it happens,
+      // for a short window after every load/refresh. Pinch-zoom itself stays fully
+      // available to the user the rest of the time.
+      (function () {
+        var viewport = document.querySelector('meta[name="viewport"]');
+        if (!viewport) return;
+        var normalContent = "width=device-width, initial-scale=1.0";
+        var lockContent = normalContent + ", maximum-scale=1.0, user-scalable=no";
+
+        function lock() {
+          viewport.setAttribute("content", lockContent);
+        }
+        function unlock() {
+          viewport.setAttribute("content", normalContent);
+        }
+
+        function resetZoom() {
+          lock();
+          var vv = window.visualViewport;
+          var reLock = function () {
+            lock();
+          };
+          if (vv) vv.addEventListener("resize", reLock);
+          // Keep the lock on for a bit so any delayed zoom-restore gets caught and
+          // reverted, then release it so the user can zoom again normally.
+          setTimeout(function () {
+            if (vv) vv.removeEventListener("resize", reLock);
+            unlock();
+          }, 900);
+        }
+
+        window.addEventListener("load", resetZoom);
+        window.addEventListener("pageshow", resetZoom);
+        document.addEventListener("visibilitychange", function () {
+          if (document.visibilityState === "visible") resetZoom();
+        });
+      })();
+    </script>
     <script type="module" src="/main.jsx"></script>
   </body>
 </html>
