@@ -882,7 +882,7 @@ const EmployeePermissionsModal = ({ emp, onClose, onSetRole, onSetPermission, on
       >
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-semibold text-stone-900">Permissions</h3>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-1">
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-700 p-2 -m-1">
             <X size={16} />
           </button>
         </div>
@@ -1387,13 +1387,15 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       meta.name = "viewport";
       document.head.appendChild(meta);
     }
+    // The final viewport also needs viewport-fit=cover so the safe-area
+    // padding below (for the iPhone notch / home indicator) actually
+    // resolves to real values instead of falling back to 0.
     const normalContent = "width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover";
-    const originalContent = meta.getAttribute("content");
     // Briefly clamp min/max scale to force a reset of any lingering pinch-zoom,
-    // then restore the app's normal (still non-zoomable) viewport settings.
+    // then settle on the app's normal (still non-zoomable) viewport settings.
     meta.setAttribute("content", "width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no");
     const t = setTimeout(() => {
-      meta.setAttribute("content", originalContent || normalContent);
+      meta.setAttribute("content", normalContent);
     }, 350);
     return () => clearTimeout(t);
   }, []);
@@ -6086,7 +6088,15 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     <div
       dir="ltr"
       className="w-full min-h-screen bg-gradient-to-b from-stone-50 via-white to-teal-50/50 text-stone-800 anim-fade-in"
-      style={{ fontFamily: "'Inter', sans-serif" }}
+      style={{
+        fontFamily: "'Inter', sans-serif",
+        // Keep content clear of the iPhone's rounded corners / home indicator
+        // when the app is added to the home screen (viewport-fit=cover mode).
+        // env() falls back to 0px on devices/browsers without a safe area.
+        paddingLeft: "env(safe-area-inset-left, 0px)",
+        paddingRight: "env(safe-area-inset-right, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+      }}
     >
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap');
 
@@ -6380,7 +6390,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 </h2>
                 <button
                   onClick={() => { setShowLicensePanel(false); setLicenseError(""); setLicenseInput(""); }}
-                  className="text-stone-400 hover:text-stone-600 p-1 -m-1 rounded-lg hover:bg-stone-100"
+                  className="text-stone-400 hover:text-stone-600 p-2 -m-2 rounded-lg hover:bg-stone-100"
                 >
                   <X size={18} />
                 </button>
@@ -8015,22 +8025,22 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         {activeSection === "hotels" && (
         <>
         {/* Summary cards, same style as the Flights section */}
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-6">
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="grid grid-cols-3 gap-1 max-[380px]:gap-1 sm:gap-3 mb-6">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-stone-100 rounded-xl p-1.5 sm:p-2 text-stone-600 shrink-0"><Building2 size={18} className="sm:hidden" /><Building2 size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Bookings</p>
               <p className="text-sm sm:text-lg font-bold truncate">{hotelTotals.count}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-teal-50 rounded-xl p-1.5 sm:p-2 text-teal-900 shrink-0"><Wallet size={18} className="sm:hidden" /><Wallet size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Total sales (EGP)</p>
               <p className="text-sm sm:text-lg font-bold truncate">{fmt(hotelTotals.sold)}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-emerald-50 rounded-xl p-1.5 sm:p-2 text-emerald-700 shrink-0"><TrendingUp size={18} className="sm:hidden" /><TrendingUp size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Total profit (EGP)</p>
@@ -8770,7 +8780,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   )}
                   <button
                     onClick={() => setViewingHotelBooking(null)}
-                    className="text-stone-400 hover:text-stone-700 p-1.5"
+                    className="text-stone-400 hover:text-stone-700 p-2.5 -m-1"
                     title="Close"
                   >
                     <X size={20} />
@@ -8846,22 +8856,22 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         {activeSection === "visa" && (
         <>
         {/* Summary cards, same style as the Flights section */}
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-6">
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="grid grid-cols-3 gap-1 max-[380px]:gap-1 sm:gap-3 mb-6">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-stone-100 rounded-xl p-1.5 sm:p-2 text-stone-600 shrink-0"><PassportIcon size={18} className="sm:hidden" /><PassportIcon size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Applicants</p>
               <p className="text-sm sm:text-lg font-bold truncate">{visaTotals.count}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-teal-50 rounded-xl p-1.5 sm:p-2 text-teal-900 shrink-0"><Wallet size={18} className="sm:hidden" /><Wallet size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Total sales (EGP)</p>
               <p className="text-sm sm:text-lg font-bold truncate">{fmt(visaTotals.sold)}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-emerald-50 rounded-xl p-1.5 sm:p-2 text-emerald-700 shrink-0"><TrendingUp size={18} className="sm:hidden" /><TrendingUp size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Total profit (EGP)</p>
@@ -9309,7 +9319,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   )}
                   <button
                     onClick={() => setViewingVisaBooking(null)}
-                    className="text-stone-400 hover:text-stone-700 p-1.5"
+                    className="text-stone-400 hover:text-stone-700 p-2.5 -m-1"
                     title="Close"
                   >
                     <X size={20} />
@@ -9363,22 +9373,22 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         {activeSection === "cars" && (
         <>
         {/* Summary cards, same style as the Flights section */}
-        <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-6">
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+        <div className="grid grid-cols-3 gap-1 max-[380px]:gap-1 sm:gap-3 mb-6">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-stone-100 rounded-xl p-1.5 sm:p-2 text-stone-600 shrink-0"><Car size={18} className="sm:hidden" /><Car size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Bookings</p>
               <p className="text-sm sm:text-lg font-bold truncate">{carTotals.count}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-teal-50 rounded-xl p-1.5 sm:p-2 text-teal-900 shrink-0"><Wallet size={18} className="sm:hidden" /><Wallet size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Total sales (EGP)</p>
               <p className="text-sm sm:text-lg font-bold truncate">{fmt(carTotals.sold)}</p>
             </div>
           </div>
-          <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+          <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
             <div className="bg-emerald-50 rounded-xl p-1.5 sm:p-2 text-emerald-700 shrink-0"><TrendingUp size={18} className="sm:hidden" /><TrendingUp size={20} className="hidden sm:block" /></div>
             <div className="min-w-0">
               <p className="text-xs text-stone-500">Total profit (EGP)</p>
@@ -9976,7 +9986,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   )}
                   <button
                     onClick={() => setViewingCarBooking(null)}
-                    className="text-stone-400 hover:text-stone-700 p-1.5"
+                    className="text-stone-400 hover:text-stone-700 p-2.5 -m-1"
                     title="Close"
                   >
                     <X size={20} />
@@ -10071,22 +10081,22 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
             {!openFile && !draftFile && (
               <>
                 {/* Summary cards, same style as the Flights section */}
-                <div className="grid grid-cols-3 gap-1.5 sm:gap-3 mb-6">
-                  <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+                <div className="grid grid-cols-3 gap-1 max-[380px]:gap-1 sm:gap-3 mb-6">
+                  <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
                     <div className="bg-stone-100 rounded-xl p-1.5 sm:p-2 text-stone-600 shrink-0"><FileText size={18} className="sm:hidden" /><FileText size={20} className="hidden sm:block" /></div>
                     <div className="min-w-0">
                       <p className="text-xs text-stone-500">Files</p>
                       <p className="text-sm sm:text-lg font-bold truncate">{visibleFiles.length}</p>
                     </div>
                   </div>
-                  <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
                     <div className="bg-teal-50 rounded-xl p-1.5 sm:p-2 text-teal-900 shrink-0"><Wallet size={18} className="sm:hidden" /><Wallet size={20} className="hidden sm:block" /></div>
                     <div className="min-w-0">
                       <p className="text-xs text-stone-500">Total sales</p>
                       <p className="text-sm sm:text-lg font-bold truncate">{fmt(filesGrandTotals.sold)}</p>
                     </div>
                   </div>
-                  <div className="bg-white rounded-2xl border border-stone-200 p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3 min-w-0">
+                  <div className="bg-white rounded-2xl border border-stone-200 p-2 max-[380px]:p-1.5 sm:p-4 flex items-center gap-1.5 max-[380px]:gap-1 sm:gap-3 min-w-0">
                     <div className="bg-emerald-50 rounded-xl p-1.5 sm:p-2 text-emerald-700 shrink-0"><TrendingUp size={18} className="sm:hidden" /><TrendingUp size={20} className="hidden sm:block" /></div>
                     <div className="min-w-0">
                       <p className="text-xs text-stone-500">Total profit</p>
@@ -10539,7 +10549,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                     <h3 className="font-semibold text-stone-900">
                       {draftFile ? "Add services" : `Add a copy to ${openFile.serial}`}
                     </h3>
-                    <button onClick={() => setShowFilePicker(false)} className="text-stone-400 hover:text-stone-700 p-1">
+                    <button onClick={() => setShowFilePicker(false)} className="text-stone-400 hover:text-stone-700 p-2 -m-1">
                       <X size={16} />
                     </button>
                   </div>
@@ -11448,7 +11458,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               <h3 className="font-semibold text-stone-900 flex items-center gap-1.5">
                 <Bell size={16} className="text-teal-800" /> Requests
               </h3>
-              <button onClick={() => setShowRequestsPanel(false)} className="text-stone-400 hover:text-stone-700 p-1">
+              <button onClick={() => setShowRequestsPanel(false)} className="text-stone-400 hover:text-stone-700 p-2 -m-1">
                 <X size={16} />
               </button>
             </div>
@@ -11631,7 +11641,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           >
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-stone-900">IATA deduction history</h3>
-              <button onClick={() => setShowIataHistory(false)} className="text-stone-400 hover:text-stone-700 p-1">
+              <button onClick={() => setShowIataHistory(false)} className="text-stone-400 hover:text-stone-700 p-2 -m-1">
                 <X size={16} />
               </button>
             </div>
@@ -11675,7 +11685,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           >
             <div className="flex items-center justify-between mb-1">
               <h3 className="font-semibold text-stone-900">Copy to which file?</h3>
-              <button onClick={() => setCopyPickerSource(null)} className="text-stone-400 hover:text-stone-700 p-1">
+              <button onClick={() => setCopyPickerSource(null)} className="text-stone-400 hover:text-stone-700 p-2 -m-1">
                 <X size={16} />
               </button>
             </div>
@@ -11736,7 +11746,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 </button>
                 <button
                   onClick={() => setPrintPreview(null)}
-                  className="text-stone-400 hover:text-stone-700 p-1.5"
+                  className="text-stone-400 hover:text-stone-700 p-2.5 -m-1"
                   title="Close"
                 >
                   <X size={16} />
@@ -11895,7 +11905,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           <div className="max-w-2xl mx-auto p-4 md:p-6">
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-lg md:text-xl font-bold text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>{viewingSupplier}</h1>
-              <button onClick={() => setViewingSupplier(null)} className="text-stone-400 hover:text-stone-700 p-1.5"><X size={18} /></button>
+              <button onClick={() => setViewingSupplier(null)} className="text-stone-400 hover:text-stone-700 p-2.5 -m-1"><X size={18} /></button>
             </div>
             {(() => {
               const s = supplierLedger.find((x) => x.supplier === viewingSupplier) || { totalOwed: 0, paid: 0, balance: 0 };
@@ -11903,7 +11913,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               const payments = supplierPayments.filter((p) => p.supplier === viewingSupplier).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
               return (
                 <>
-                  <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div className="grid grid-cols-3 gap-1 max-[380px]:gap-1 sm:gap-3 mb-6">
                     <div className="bg-stone-50 rounded-xl p-3 text-center">
                       <p className="text-[11px] text-stone-500 mb-1">{at("colTotalOwed")}</p>
                       <p className="font-bold text-stone-800">{fmt(s.totalOwed)}</p>
@@ -11978,7 +11988,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           <div className="max-w-2xl mx-auto p-4 md:p-6">
             <div className="flex items-center justify-between mb-6">
               <h1 className="text-lg md:text-xl font-bold text-stone-900" style={{ fontFamily: "'Fraunces', serif" }}>{viewingCustomer}</h1>
-              <button onClick={() => setViewingCustomer(null)} className="text-stone-400 hover:text-stone-700 p-1.5"><X size={18} /></button>
+              <button onClick={() => setViewingCustomer(null)} className="text-stone-400 hover:text-stone-700 p-2.5 -m-1"><X size={18} /></button>
             </div>
             {(() => {
               const c = customerLedger.find((x) => x.customer === viewingCustomer) || { totalDue: 0, paid: 0, balance: 0 };
@@ -11986,7 +11996,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
               const payments = customerPayments.filter((p) => p.customer === viewingCustomer).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
               return (
                 <>
-                  <div className="grid grid-cols-3 gap-3 mb-6">
+                  <div className="grid grid-cols-3 gap-1 max-[380px]:gap-1 sm:gap-3 mb-6">
                     <div className="bg-stone-50 rounded-xl p-3 text-center">
                       <p className="text-[11px] text-stone-500 mb-1">{at("colTotalDue")}</p>
                       <p className="font-bold text-stone-800">{fmt(c.totalDue)}</p>
