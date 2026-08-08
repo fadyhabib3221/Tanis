@@ -6066,6 +6066,19 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
       <style>{`@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,500&family=Inter:wght@400;500;600;700&display=swap');
+
+        /* iOS Safari auto-zooms the whole page in when a tapped input/select/
+           textarea has a font-size under 16px, and then does not zoom back
+           out — leaving the entire app stuck zoomed in. Most fields in this
+           app use text-sm (14px), which triggers it. Forcing 16px on mobile
+           only (viewports under 640px) stops Safari from ever zooming, while
+           leaving the desktop font sizes untouched. */
+        @media (max-width: 640px) {
+          input, select, textarea {
+            font-size: 16px !important;
+          }
+        }
+
         .price-input::-webkit-outer-spin-button,
         .price-input::-webkit-inner-spin-button {
           -webkit-appearance: none;
