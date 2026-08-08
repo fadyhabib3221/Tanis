@@ -13,7 +13,7 @@ import {
   ShieldCheck, Wifi, User, Cloud, Globe2, List, Car, FileText, ArrowLeft,
   MapPin, Compass, Luggage, Anchor, Sparkles, Plus, Printer, SlidersHorizontal, ChevronDown,
   History, Bell, Send, Landmark, Receipt, PieChart, ArrowUpCircle, ArrowDownCircle,
-  Banknote, HandCoins, ClipboardList, Globe,
+  Banknote, HandCoins, ClipboardList, Globe, ScrollText,
 } from "lucide-react";
 
 // A small passport-shaped icon (booklet with a globe emblem) for the Visa section, drawn
@@ -1479,6 +1479,19 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   const [currentUser, setCurrentUser] = useState(null); // { username, name, isAdmin }
   const [loading, setLoading] = useState(true);
 
+  // Activity log ("سجل النشاط") — an admin-only audit trail of who did what and when
+  // across tickets, hotel/visa bookings, employee accounts, and login/logout. Kept in
+  // shared storage like the rest of the app's data (see logActivity below) so every main
+  // account sees the same trail regardless of which device made the change.
+  const [activityLog, setActivityLog] = useState([]);
+  const activityLogRef = useRef(activityLog);
+  useEffect(() => {
+    activityLogRef.current = activityLog;
+  }, [activityLog]);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [activityLogFilter, setActivityLogFilter] = useState("all");
+  const [activityLogSearch, setActivityLogSearch] = useState("");
+
   // Presence: which employees are currently connected (main account only)
   const [presenceMap, setPresenceMap] = useState({}); // username -> last-seen timestamp
   const [showOnlineList, setShowOnlineList] = useState(false);
@@ -1835,7 +1848,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   useEffect(() => {
     (async () => {
       try {
-        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, sessionRes, suggestionsRes, setupRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes] = await Promise.all([
+        const [ticketsRes, hotelsRes, visasRes, carsRes, filesRes, employeesRes, sessionRes, suggestionsRes, setupRes, licenseRes, requestsRes, expensesRes, supplierPaymentsRes, customerPaymentsRes, treasuryAccountsRes, treasuryEntriesRes, activityLogRes] = await Promise.all([
           window.storage.get("tickets:list", true).catch(() => null),
           window.storage.get("tickets:hotels", true).catch(() => null),
           window.storage.get("tickets:visas", true).catch(() => null),
@@ -1852,6 +1865,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           window.storage.get("tickets:customerPayments", true).catch(() => null),
           window.storage.get("tickets:treasuryAccounts", true).catch(() => null),
           window.storage.get("tickets:treasuryEntries", true).catch(() => null),
+          window.storage.get("tickets:activityLog", true).catch(() => null),
         ]);
         const ticketsData = ticketsRes && ticketsRes.value ? JSON.parse(ticketsRes.value) : [];
         const hotelsData = hotelsRes && hotelsRes.value ? JSON.parse(hotelsRes.value) : [];
@@ -1872,6 +1886,13 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         setCustomerPayments(customerPaymentsRes && customerPaymentsRes.value ? JSON.parse(customerPaymentsRes.value) : []);
         setTreasuryAccounts(treasuryAccountsRes && treasuryAccountsRes.value ? JSON.parse(treasuryAccountsRes.value) : []);
         setTreasuryEntries(treasuryEntriesRes && treasuryEntriesRes.value ? JSON.parse(treasuryEntriesRes.value) : []);
+        if (activityLogRes && activityLogRes.value) {
+          try {
+            setActivityLog(JSON.parse(activityLogRes.value));
+          } catch (e) {
+            // ignore malformed log data
+          }
+        }
         requestsData.forEach((r) => seenRequestIdsRef.current.add(r.id));
         if (licenseRes && licenseRes.value) {
           try {
@@ -2508,6 +2529,55 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     }
   };
 
+  const persistActivityLog = async (next) => {
+    setActivityLog(next);
+    try {
+      await window.storage.set("tickets:activityLog", JSON.stringify(next), true);
+    } catch (e) {
+      // The log is a convenience/audit feature — a failed save here should never block
+      // the action that triggered it.
+    }
+  };
+
+  // Records one entry in the admin-only activity log. `type` groups entries for the
+  // filter buttons on the Log page ("ticket" | "hotel" | "visa" | "employee" | "auth");
+  // `action` is the short Arabic description shown per row, and `details` is an optional
+  // second line (e.g. the customer name or which employee was affected). Kept to the
+  // most recent 500 entries so the shared log never grows without bound. Uses
+  // activityLogRef rather than the activityLog state directly so back-to-back calls in
+  // the same tick (e.g. add + immediately edit) never clobber each other.
+  const logActivity = (type, action, details, actor) => {
+    const user = actor || currentUser;
+    if (!user) return;
+    const entry = {
+      id: `L-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      type,
+      action,
+      details: details || "",
+      by: user.name,
+      byUsername: user.username,
+      at: new Date().toISOString(),
+    };
+    const next = [entry, ...activityLogRef.current].slice(0, 500);
+    persistActivityLog(next);
+  };
+
+  // Refreshes the log from shared storage each time the admin opens the panel, so it
+  // reflects actions taken from other devices/sessions since this one last loaded it.
+  useEffect(() => {
+    if (!showActivityLog) return;
+    (async () => {
+      try {
+        const res = await window.storage.get("tickets:activityLog", true).catch(() => null);
+        if (res && res.value) {
+          setActivityLog(JSON.parse(res.value));
+        }
+      } catch (e) {
+        // Best-effort; falls back to whatever was already loaded
+      }
+    })();
+  }, [showActivityLog]);
+
   // Sends a new request from the signed-in account to another employee.
   const handleSendRequest = async () => {
     setRequestSendError("");
@@ -2744,6 +2814,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         h.id === hotelEditingId ? { ...h, ...hotelForm, id: hotelEditingId } : h
       );
       await persistHotelBookings(next);
+      logActivity("hotel", "تعديل حجز فندق", hotelForm.hotel);
     } else {
       const record = {
         ...hotelForm,
@@ -2752,6 +2823,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         employeeUsername: currentUser.username,
       };
       await persistHotelBookings([record, ...hotelBookings]);
+      logActivity("hotel", "إضافة حجز فندق", record.hotel);
     }
     resetHotelForm();
   };
@@ -2789,7 +2861,9 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
 
   const handleDeleteHotel = (id, onDeleted) => {
     requestConfirm("Delete this hotel booking? This cannot be undone.", async () => {
+      const target = hotelBookings.find((h) => h.id === id);
       await persistHotelBookings(hotelBookings.filter((h) => h.id !== id));
+      logActivity("hotel", "حذف حجز فندق", target ? target.hotel : "");
       if (hotelEditingId === id) resetHotelForm();
       setConfirmDialog(null);
       if (onDeleted) onDeleted();
@@ -2870,6 +2944,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     if (visaEditingId) {
       const next = visaBookings.map((v) => (v.id === visaEditingId ? { ...v, ...visaForm, id: visaEditingId } : v));
       await persistVisaBookings(next);
+      logActivity("visa", "تعديل حجز فيزا", visaForm.visaType);
     } else {
       const record = {
         ...visaForm,
@@ -2878,6 +2953,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         employeeUsername: currentUser.username,
       };
       await persistVisaBookings([record, ...visaBookings]);
+      logActivity("visa", "إضافة حجز فيزا", record.visaType);
     }
     resetVisaForm();
   };
@@ -2901,7 +2977,9 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
 
   const handleDeleteVisa = (id, onDeleted) => {
     requestConfirm("Delete this visa booking? This cannot be undone.", async () => {
+      const target = visaBookings.find((v) => v.id === id);
       await persistVisaBookings(visaBookings.filter((v) => v.id !== id));
+      logActivity("visa", "حذف حجز فيزا", target ? target.visaType : "");
       if (visaEditingId === id) resetVisaForm();
       setConfirmDialog(null);
       if (onDeleted) onDeleted();
@@ -3325,6 +3403,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     await window.storage.set("session:user", match.username, false);
     sessionStartedAtRef.current = Date.now();
     setCurrentUser({ username: match.username, name: match.name, isAdmin: !!match.isAdmin });
+    logActivity("auth", "تسجيل دخول", "", { name: match.name, username: match.username });
     setLoginUsername(""); setLoginPassword("");
     try {
       const lastSectionRes = await window.storage.get(`tickets:lastSection:${match.username}`, false).catch(() => null);
@@ -3338,6 +3417,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   };
 
   const handleLogout = async () => {
+    logActivity("auth", "تسجيل خروج");
     await window.storage.delete("session:user", false).catch(() => {});
     setCurrentUser(null);
     setShowManage(false);
@@ -3388,6 +3468,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       },
     ];
     await persistEmployees(next);
+    logActivity("employee", "إضافة موظف جديد", `${newEmployee.name.trim()} (${newEmployee.username.trim()})`);
     setNewEmployee(emptyNewEmployee);
     setShowNewEmployeePerms(false);
   };
@@ -3405,6 +3486,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       e.username === username ? { ...e, role, ...preset } : e
     );
     await persistEmployees(next);
+    const target = (employees || []).find((e) => e.username === username);
+    logActivity("employee", "تغيير درجة موظف", `${target ? target.name : username} — ${roleLabel(role)}`);
   };
 
   // Single generic handler for every individual permission toggle (view all tickets,
@@ -3421,6 +3504,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       e.username === username ? { ...e, ...reconcilePermissions({ ...e, [field]: checked }) } : e
     );
     await persistEmployees(next);
+    const target = (employees || []).find((e) => e.username === username);
+    logActivity("employee", "تعديل صلاحيات موظف", `${target ? target.name : username} — ${field}: ${checked ? "on" : "off"}`);
   };
 
   // Toggles one section (Flights/Hotels/Visa/Transportation/Files) on or off for an
@@ -3434,6 +3519,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       e.username === username ? { ...e, sections: { ...employeeSections(e), [section]: checked } } : e
     );
     await persistEmployees(next);
+    const target = (employees || []).find((e) => e.username === username);
+    logActivity("employee", "تعديل أقسام موظف", `${target ? target.name : username} — ${section}: ${checked ? "on" : "off"}`);
   };
 
   // Sets one of View all services / Edit / Delete for one specific section (Flights,
@@ -3451,6 +3538,8 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       return { ...e, sectionPerms: { ...(e.sectionPerms || {}), [section]: updated } };
     });
     await persistEmployees(next);
+    const target = (employees || []).find((e) => e.username === username);
+    logActivity("employee", "تعديل صلاحيات قسم لموظف", `${target ? target.name : username} — ${section}/${field}: ${checked ? "on" : "off"}`);
   };
 
   // Promotes an employee to a main/admin account. Any main account can promote another one.
@@ -3468,6 +3557,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
           e.username === username ? { ...e, isAdmin: true } : e
         );
         await persistEmployees(next);
+        logActivity("employee", "ترقية موظف لحساب رئيسي", target.name);
         setConfirmDialog(null);
       }
     );
@@ -3491,6 +3581,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         e.username === username ? { ...e, isAdmin: false } : e
       );
       await persistEmployees(next);
+      logActivity("employee", "إلغاء صلاحية الحساب الرئيسي", target.name);
       // If the admin demoted themselves, drop their manage-panel view since they're no longer main
       if (username === currentUser.username) {
         setCurrentUser({ ...currentUser, isAdmin: false });
@@ -3509,7 +3600,9 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
       setManageError("You can't delete the account you're logged in with");
       return;
     }
+    const target = (employees || []).find((e) => e.username === username);
     await persistEmployees((employees || []).filter((e) => e.username !== username));
+    logActivity("employee", "حذف موظف", target ? `${target.name} (${target.username})` : username);
   };
 
   const startEditEmployee = (emp) => {
@@ -3557,6 +3650,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         : e
     );
     await persistEmployees(next);
+    logActivity("employee", "تعديل بيانات موظف", `${trimmedName} (${trimmedUsername})`);
 
     // If the main account edited its own account, keep the current session in sync
     if (editingUsername === currentUser.username) {
@@ -3595,6 +3689,7 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         : e
     );
     await persistEmployees(next);
+    logActivity("employee", "تعديل بيانات موظف", `${trimmedName} (${trimmedUsername})`);
 
     // If the main account edited its own account, keep the current session in sync
     if (username === currentUser.username) {
@@ -3830,6 +3925,9 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
         next = [record, ...tickets];
       }
       persistTickets(next);
+      const customerName = (record.customers && record.customers[0] && record.customers[0].name) || record.customer || "";
+      const route = record.multiDestination ? (record.destinations || []).join(" → ") : `${record.from || ""} → ${record.to || ""}`;
+      logActivity("ticket", wasEditing ? "تعديل تذكرة" : "إضافة تذكرة", `${customerName} — ${route}`);
       rememberSuggestionsFromRecord(record);
       if (wasEditing) showActionToast("Ticket updated");
       setForm(getEmptyForm());
@@ -3871,7 +3969,10 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
     }
     requestConfirm("Delete this ticket? This cannot be undone.", () => {
       if (form.id === id) { setForm(getEmptyForm()); setSupplierOther(false); }
+      const target = tickets.find((t) => t.id === id);
+      const targetName = target ? ((target.customers && target.customers[0] && target.customers[0].name) || target.customer || "") : "";
       persistTickets(tickets.filter((t) => t.id !== id));
+      logActivity("ticket", "حذف تذكرة", targetName);
       if (afterConfirm) afterConfirm();
     });
   };
@@ -4358,6 +4459,19 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
   const isOwnerUser =
     !!currentUser && !currentUser.isAdmin && !!(currentEmployeeRecord && currentEmployeeRecord.isOwner);
   const hasAdminAccess = !!currentUser && (currentUser.isAdmin || isOwnerUser);
+  // Labels for the activity log's filter chips and per-row type badge.
+  const ACTIVITY_LOG_TYPE_LABELS = {
+    all: "الكل", ticket: "تذاكر", hotel: "فنادق", visa: "فيزا", employee: "موظفين", auth: "دخول وخروج",
+  };
+  const filteredActivityLog = (activityLog || []).filter((entry) => {
+    if (activityLogFilter !== "all" && entry.type !== activityLogFilter) return false;
+    if (activityLogSearch.trim()) {
+      const q = activityLogSearch.trim().toLowerCase();
+      const hay = `${entry.action} ${entry.details} ${entry.by}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
   const myPendingRequestsCount = (requests || []).filter(
     (r) => currentUser && r.toUsername === currentUser.username && r.status === "pending"
   ).length;
@@ -6314,6 +6428,12 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                   <Factory size={15} />
                 </button>
               )}
+              {currentUser.isAdmin && (
+                <button onClick={() => setShowActivityLog(!showActivityLog)} title="سجل النشاط"
+                  className="border border-white/20 bg-white/10 hover:bg-white/20 text-white text-sm rounded-2xl p-2 flex items-center justify-center transition-colors">
+                  <ScrollText size={15} />
+                </button>
+              )}
               <button
                 onClick={() => {
                   setShowRequestsPanel(!showRequestsPanel);
@@ -6427,6 +6547,83 @@ export default function TicketsApp({ onChangeServer, currentServerUrl } = {}) {
                 className="w-full mt-4 bg-gradient-to-b from-teal-700 to-teal-900 hover:from-teal-600 hover:to-teal-800 text-white text-sm font-semibold rounded-xl px-4 py-2 shadow-sm shadow-teal-800/30 ring-1 ring-inset ring-white/10 transition-colors disabled:opacity-60">
                 {licenseSaving ? "Saving..." : "Activate"}
               </button>
+            </div>
+          </div>
+        )}
+
+        {showActivityLog && currentUser.isAdmin && (
+          <div
+            className="fixed inset-0 z-50 bg-black/40 flex items-start md:items-center justify-center p-4 overflow-y-auto"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) setShowActivityLog(false);
+            }}
+          >
+            <div className="bg-white rounded-2xl border border-stone-200 p-4 md:p-5 w-full max-w-2xl my-8 md:my-0 max-h-[90vh] overflow-y-auto flex flex-col">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-stone-900 flex items-center gap-2">
+                  <ScrollText size={16} className="text-teal-800" /> سجل النشاط
+                </h2>
+                <button
+                  onClick={() => setShowActivityLog(false)}
+                  className="text-stone-400 hover:text-stone-600 p-2 -m-2 rounded-lg hover:bg-stone-100"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="text-xs text-stone-400 mb-3">
+                سجل بكل الإضافات والتعديلات والحذف على التذاكر وحجوزات الفنادق والفيزا، وحسابات الموظفين، بالإضافة لتسجيل الدخول والخروج. مرئي للحساب الرئيسي فقط.
+              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <Search size={15} className="text-stone-400 shrink-0" />
+                <input
+                  value={activityLogSearch}
+                  onChange={(e) => setActivityLogSearch(e.target.value)}
+                  placeholder="بحث بالاسم أو الوصف..."
+                  className="w-full border border-stone-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-700"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap mb-4">
+                {Object.entries(ACTIVITY_LOG_TYPE_LABELS).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setActivityLogFilter(key)}
+                    className={`text-xs font-medium rounded-full px-3 py-1.5 border transition-colors ${
+                      activityLogFilter === key
+                        ? "bg-teal-800 border-teal-800 text-white"
+                        : "border-stone-300 text-stone-600 hover:bg-stone-100"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 overflow-y-auto -mx-1 px-1">
+                {filteredActivityLog.length === 0 ? (
+                  <p className="text-sm text-stone-400 text-center py-10">لا يوجد نشاط مسجل يطابق البحث</p>
+                ) : (
+                  <div className="space-y-2">
+                    {filteredActivityLog.map((entry) => (
+                      <div key={entry.id} className="border border-stone-200 rounded-xl px-3 py-2.5 flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium text-stone-800">{entry.action}</span>
+                            <span className="text-[10px] font-semibold text-teal-800 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5">
+                              {ACTIVITY_LOG_TYPE_LABELS[entry.type] || entry.type}
+                            </span>
+                          </div>
+                          {entry.details && (
+                            <p className="text-xs text-stone-500 mt-0.5 break-words">{entry.details}</p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-medium text-stone-600">{entry.by}</p>
+                          <p className="text-[11px] text-stone-400">{formatDateTime(entry.at)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         )}
