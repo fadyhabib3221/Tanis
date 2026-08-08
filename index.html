@@ -3,22 +3,17 @@
   <head>
     <meta charset="UTF-8" />
     <meta id="viewport-meta" name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <script>
-      // بعض متصفحات الموبايل (Safari و Chrome) بترجّع الصفحة بمستوى الزووم القديم
-      // بعد الريفريش لأنها بترجعها من الكاش (bfcache) من غير إعادة حساب الـ viewport.
-      // الكود ده بيجبر المتصفح يعيد ضبط الزووم على المقاس الطبيعي كل مرة.
-      function resetZoom() {
-        var vp = document.getElementById("viewport-meta");
-        if (!vp) return;
-        var content = vp.getAttribute("content");
-        vp.setAttribute("content", "width=device-width, initial-scale=0.9, maximum-scale=1.0, user-scalable=no");
-        requestAnimationFrame(function () {
-          vp.setAttribute("content", content);
-        });
+    <style>
+      /* بتمنع Safari/Chrome على الموبايل من الزووم التلقائي لما أي input
+         (زي حقل اليوزرنيم اللي عليه autoFocus في صفحة اللوجين) ياخد فوكس
+         وخطه أصغر من 16px. الخاصية دي بتتفعّل بس على شاشات الموبايل عشان
+         ما تأثرش على شكل الحقول على الديسكتوب. */
+      @media screen and (max-width: 768px) {
+        input, select, textarea {
+          font-size: 16px !important;
+        }
       }
-      window.addEventListener("pageshow", resetZoom);
-      document.addEventListener("DOMContentLoaded", resetZoom);
-    </script>
+    </style>
     <meta name="theme-color" content="#0f766e" />
     <meta name="description" content="Flight Ticket Manager — manage tickets, employees and sales in one place." />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
